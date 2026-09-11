@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>singbox-router · 分流客户端</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo">⇋</span>
+        <div>
+          <div class="title">singbox-router</div>
+          <div class="sub" id="core-version">检测内核中…</div>
+        </div>
+      </div>
+
+      <div class="status-group">
+        <span class="pill" id="status-pill">—</span>
+        <span class="pill ghost" id="sysproxy-pill">系统代理：—</span>
+        <span class="pill" id="tun-pill" hidden>TUN</span>
+        <span class="pill ghost" id="dirty-pill" hidden>配置已变更</span>
+      </div>
+
+      <div class="actions">
+        <select id="proxy-select" title="主端口所用节点"></select>
+        <select id="mode-select" title="分流模式">
+          <option value="rule">规则分流</option>
+          <option value="global">全局代理</option>
+          <option value="direct">全局直连</option>
+        </select>
+        <button id="btn-start" class="primary">启动</button>
+        <button id="btn-stop">停止</button>
+        <button id="btn-apply">应用配置</button>
+        <button id="btn-sysproxy">接管系统代理</button>
+      </div>
+    </header>
+
+    <nav class="tabs">
+      <button data-tab="nodes" class="active">节点</button>
+      <button data-tab="rules">规则</button>
+      <button data-tab="subs">订阅 / 导入</button>
+      <button data-tab="settings">设置</button>
+      <button data-tab="doctor">排查<span class="tab-badge" id="doctor-badge" hidden></span></button>
+    </nav>
+
+    <main>
+      <!-- ---------------------------------------------------------- 节点 -->
+      <section id="tab-nodes" class="tab active">
+        <div class="bar">
+          <div class="hint">
+            每个节点可绑定一个<b>独立本地端口</b>：程序指向该端口，流量就固定从这个节点出去。
+            主端口 <code id="main-port-ref">—</code> 与 TUN 走所选节点。
+            <b>【直连】节点</b>是虚拟节点，走它的端口在任何模式下都直连。
+          </div>
+          <div class="bar-actions">
+            <input id="node-filter" type="search" placeholder="筛选节点…" />
+            <button id="btn-add-direct">+ 直连节点</button>
+            <button id="btn-export-all">导出全部</button>
+            <button id="btn-test-all">全部测速</button>
+            <button id="btn-reassign">重排端口</button>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table id="nodes-table">
+            <thead>
+              <tr>
+                <th class="col-on">启用</th>
+                <th>名称</th>
+                <th>类型</th>
+                <th>服务器</th>
+                <th class="col-port">独立端口</th>
+                <th class="col-delay">延迟</th>
+                <th class="col-ops">操作</th>
+              </tr>
+            </thead>
+            <tbody id="nodes-body"></tbody>
+          </table>
+          <p class="empty" id="nodes-empty">还没有节点。去「导入」或「订阅」添加。</p>
+        </div>
+      </section>
+
+      <!-- ---------------------------------------------------------- 规则 -->
+      <section id="tab-rules" class="tab">
+        <div class="card">
+          <h3>添加规则</h3>
+          <p class="hint">
+            一条规则里的<b>所有</b>域名、IP、进程（命中任意一个）都分到同一个去向。
+            规则<b>从上到下</b>依次匹配，上面的优先。
+          </p>
+          <div class="grid">
+            <label>域名（每行一个，后缀匹配含子域名）
+              <textarea id="rule-domain" rows="3" spellcheck="false" placeholder="github.com&#10;re:^.*\.cn$"></textarea>
+            </label>
+            <label>IP / 网段（每行一个，只认 CIDR，不支持正则）
+              <textarea id="rule-ip" rows="3" spellcheck="false" placeholder="198.51.100.7&#10;10.0.0.0/8"></textarea>
+            </label>
+            <label>进程（进程名 / 完整路径 / 路径正则，正则自动识别）
+              <textarea id="rule-process" rows="3" spellcheck="false" placeholder="telegram-desktop&#10;/usr/bin/curl&#10;^/usr/lib/firefox/"></textarea>
+            </label>
+          </div>
+          <div class="form-row">
+            <label class="inline">去向
+              <select id="rule-target"></select>
+            </label>
+            <input id="rule-note" placeholder="备注（可留空）" class="narrow" />
+            <button id="btn-add-rule" class="primary">添加规则</button>
+            <button id="btn-cancel-edit" hidden>取消编辑</button>
+            <span id="rule-hint" class="hint"></span>
+          </div>
+          <p class="hint">
+            正则写法：域名栏用 <code>re:</code> 前缀（如 <code>re:^.*\.cn$</code>）；
+            进程栏直接写正则就行（含 <code>^</code> <code>$</code> <code>.</code> <code>*</code> 等符号自动识别，如 <code>^/usr/lib/firefox/</code>）。
+            语法按 Go RE2 —— 不支持前后向断言和反向引用，保存时会先校验。
+            <b>IP 只能写 CIDR</b>：sing-box 的 IP 匹配走前缀树，没有正则。
+            进程匹配对 TUN 和本地代理端口（系统代理）都有效。
+          </p>
+        </div>
+
+        <div class="bar">
+          <div class="hint">
+            <b>顺序即优先级</b>（从上到下，首个匹配生效）。整体优先级：
+            端口直绑 → 模式开关 → <b>自定义规则</b> → 私有地址 → 默认走代理。
+          </div>
+          <div class="bar-actions">
+            <span class="hint" id="rules-count"></span>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table id="rules-table">
+            <thead>
+              <tr>
+                <th class="col-on">启用</th>
+                <th>匹配内容</th>
+                <th class="col-target">去向</th>
+                <th>备注</th>
+                <th class="col-ops">操作</th>
+              </tr>
+            </thead>
+            <tbody id="rules-body"></tbody>
+          </table>
+          <p class="empty" id="rules-empty">还没有规则。上面填好后点「添加规则」。</p>
+        </div>
+      </section>
+
+      <!-- --------------------------------------------- 订阅 / 导入 -->
+      <section id="tab-subs" class="tab">
+        <div class="card">
+          <h3>添加订阅</h3>
+          <div class="form-row">
+            <input id="sub-url" placeholder="订阅链接 https://…" />
+            <input id="sub-name" placeholder="备注名（可留空）" class="narrow" />
+            <input id="sub-ua" placeholder="User-Agent（默认 clash.meta）" class="narrow" />
+            <button id="btn-add-sub" class="primary">添加并拉取</button>
+          </div>
+          <p class="hint">
+            机场常按 UA 返回不同格式。默认用 <code>clash.meta</code> 拿 Clash YAML；
+            拿不到节点时可以换 <code>sing-box</code> 或 <code>v2rayN</code> 再试。
+          </p>
+        </div>
+        <div id="subs-list" class="list"></div>
+
+        <div class="card">
+          <h3>粘贴导入</h3>
+          <p class="hint">
+            自动识别：<b>订阅 base64</b> ·
+            <b>分享链接</b>（vless / vmess / ss / trojan / hysteria2 / hysteria / tuic / anytls / socks，可多行）·
+            <b>Clash YAML</b>（含 <code>proxies:</code>）· <b>sing-box JSON</b>（出站数组或 <code>outbounds</code>）·
+            单个 JS 对象字面量。
+          </p>
+          <textarea id="import-text" rows="10" spellcheck="false" placeholder="把节点内容粘到这里…"></textarea>
+          <div class="form-row">
+            <button id="btn-import" class="primary">解析并导入</button>
+            <span id="import-result" class="hint"></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ---------------------------------------------------------- 设置 -->
+      <section id="tab-settings" class="tab">
+        <div class="card">
+          <h3>端口</h3>
+          <div class="grid">
+            <label>主代理端口<input id="set-mainPort" type="number" min="1" max="65535" /></label>
+            <label>节点端口起始值<input id="set-portBase" type="number" min="1" max="65535" /></label>
+            <label>Clash API 端口<input id="set-clashApiPort" type="number" min="1" max="65535" /></label>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>网络</h3>
+          <label class="check"><input id="set-allowLan" type="checkbox" /> 允许局域网连接（监听 0.0.0.0）</label>
+          <div class="grid">
+            <label>国内 DNS（直连解析用）<input id="set-dnsLocal" /></label>
+            <label>国外 DNS（经代理，DoT/853）<input id="set-dnsRemote" /></label>
+          </div>
+          <p class="hint">
+            不做自动分流：主端口与 TUN 的流量全部走所选节点，私有地址与 <code>.local</code> 等内网域名直连。
+            需要某些流量直连时，加一个<b>【直连】节点</b>并把程序指向它的端口。
+          </p>
+        </div>
+
+        <div class="card">
+          <h3>国内自动分流（可选）</h3>
+          <label class="check">
+            <input id="set-chinaDirect" type="checkbox" />
+            命中 <code>geosite-cn</code> 的域名和 <code>geoip-cn</code> 的 IP 走直连，其余走代理
+          </label>
+          <div id="ruleset-status" class="ruleset-status"></div>
+          <div class="grid">
+            <label>规则集来源
+              <select id="set-rulesetSource">
+                <option value="auto">auto（本地有就用本地，没有则内核远程拉）</option>
+                <option value="local">local（只用本地文件，无启动期下载）</option>
+                <option value="remote">remote（始终远程，内核自动更新）</option>
+              </select>
+            </label>
+            <label>规则集镜像（留空用 GitHub）<input id="set-rulesetMirror" placeholder="https://ghfast.top/" /></label>
+            <label>remote 模式更新周期<input id="set-rulesetUpdateInterval" placeholder="7d" /></label>
+          </div>
+          <div class="form-row">
+            <button id="btn-update-rulesets">下载 / 更新规则集</button>
+            <span id="ruleset-result" class="hint"></span>
+          </div>
+          <p class="hint">
+            默认关。开了之后这是最宽泛的一层「猜」，所以排在所有显式规则之后 ——
+            端口直绑、模式开关、「规则」页的自定义规则都优先于它。
+            IP 侧<b>没有</b>插全局 <code>resolve</code>：geoip-cn 匹配的是目标本来就是 IP 的连接。
+          </p>
+        </div>
+
+        <div class="card">
+          <h3>TUN 全局代理</h3>
+          <p class="hint">
+            开启后所有程序都走代理，包括<b>不认系统代理的 Telegram、CLI 工具</b>。
+            需要内核具备 <code>CAP_NET_ADMIN</code>：执行一次 <code>bash scripts/setup-tun.sh</code>，之后启动免密码。
+          </p>
+          <div id="tun-status" class="tun-status"></div>
+          <label class="check"><input id="set-tunEnabled" type="checkbox" /> 启用 TUN 全局代理</label>
+          <label class="check"><input id="set-tunStrictRoute" type="checkbox" /> 严格路由（strict_route，防止流量绕过）</label>
+          <div class="grid">
+            <label>网卡名<input id="set-tunInterface" /></label>
+            <label>网卡地址<input id="set-tunAddress" /></label>
+            <label>MTU<input id="set-tunMTU" type="number" /></label>
+            <label>网络栈
+              <select id="set-tunStack">
+                <option value="mixed">mixed（推荐）</option>
+                <option value="system">system</option>
+                <option value="gvisor">gvisor</option>
+              </select>
+            </label>
+          </div>
+          <p class="hint">
+            ⚠ TUN 与 v2rayA / v2rayN / Clash 的全局模式<b>不能同时开</b>，会互相抢路由 —— 启动时会自动检测并拦住。
+          </p>
+          <div class="form-row">
+            <button id="btn-tun-recover">一键恢复（清理 TUN 残留）</button>
+            <span id="tun-recover-result" class="hint"></span>
+          </div>
+          <p class="hint">
+            内核被强杀（断电 / OOM / kill -9）后可能留下指向已删网卡的策略路由，整机断网。
+            点上面的按钮清理<b>本项目自己的</b>残留（网卡 sbr-tun / 路由表 2023 / 规则段 9100），
+            会弹一次系统授权框，其它客户端的 TUN 不受影响。等价于 <code>sudo bash scripts/tun-recover.sh</code>。
+          </p>
+        </div>
+
+        <div class="card">
+          <h3>系统代理</h3>
+          <label class="check"><input id="set-autoSetSystemProxy" type="checkbox" /> 内核启动时自动接管，停止时自动还原</label>
+          <label>绕过列表（逗号或换行分隔）<textarea id="set-bypassList" rows="3"></textarea></label>
+          <p class="hint" id="env-hint"></p>
+          <p class="hint">这一项只影响<b>图形程序</b>（浏览器、桌面客户端）。命令行工具不读它 —— 看下面。</p>
+        </div>
+
+        <div class="card">
+          <h3>终端代理</h3>
+          <p class="hint">
+            <code>curl</code> / <code>git</code> / <code>npm</code> / <code>pip</code> / <code>apt</code> /
+            <code>docker build</code> <b>完全不认</b>上面那个系统代理，它们只看
+            <code>http_proxy</code> 这一类环境变量。「系统代理明明开着，终端里 git clone 还是卡死」
+            就是这么来的。
+          </p>
+          <div id="termproxy-status" class="term-status"></div>
+          <div class="form-row">
+            <button id="btn-termproxy" class="primary">接管终端代理</button>
+            <button id="btn-termproxy-copy">复制命令（给已开着的终端）</button>
+            <span id="termproxy-result" class="hint"></span>
+          </div>
+          <p class="hint">
+            接管 = 往 <code>~/.bashrc</code> / <code>~/.zshrc</code>（用 fish 的话是 <code>config.fish</code>）里
+            挂一段带标记的 <code>source</code>，<b>只对以后新开的终端生效</b>。
+            已经开着的终端没救 —— 一个进程改不了另一个进程的环境变量，所以那边要粘一次上面那行命令。
+            动手之前会把原文备份到配置目录，取消接管时按标记整段摘掉，不碰你自己写的行。
+          </p>
+          <p class="hint">
+            生成的片段带<b>活性检查</b>：内核没在跑时不设变量。否则代理一停，每条
+            <code>curl</code> / <code>apt</code> 都会变成「连接被拒绝」，比没有代理更难查。
+            单个终端里可以用 <code>proxyon</code> / <code>proxyoff</code> / <code>proxystatus</code> 临时开关。
+          </p>
+        </div>
+
+        <div class="card">
+          <h3>其他</h3>
+          <div class="grid">
+            <label>测速地址<input id="set-testUrl" /></label>
+            <label>测速超时 (ms)<input id="set-testTimeout" type="number" /></label>
+            <label>日志级别<input id="set-logLevel" /></label>
+            <label>内核路径（留空自动探测）<input id="set-corePath" /></label>
+          </div>
+          <label class="check"><input id="set-autoAssignPorts" type="checkbox" /> 导入节点时自动分配独立端口</label>
+          <label class="check"><input id="set-autoStartCore" type="checkbox" /> 开机自启内核（静默，登录后自动连上，不弹窗）</label>
+        </div>
+
+        <div class="form-row">
+          <button id="btn-save-settings" class="primary">保存设置</button>
+          <button id="btn-view-config">查看生成的配置</button>
+          <span id="settings-result" class="hint"></span>
+        </div>
+
+        <div class="bar" style="margin-top: 1.5rem">
+          <div class="hint">内核实时输出</div>
+          <div class="bar-actions">
+            <label class="check"><input id="log-follow" type="checkbox" checked /> 自动滚动</label>
+            <button id="btn-clear-logs">清屏</button>
+          </div>
+        </div>
+        <pre id="logs" class="logs"></pre>
+      </section>
+
+      <!-- ---------------------------------------------------------- 排查 -->
+      <section id="tab-doctor" class="tab">
+        <div class="bar">
+          <div class="hint">
+            环境、权限、端口、配置、TUN 残留一次全查。<b>能修的都给按钮</b> ——
+            覆盖了原先 <code>scripts/</code> 里那几个脚本干的活，不需要开终端。
+          </div>
+          <div class="bar-actions">
+            <button id="btn-doctor-run" class="primary">重新检查</button>
+            <button id="btn-doctor-copy">复制报告</button>
+          </div>
+        </div>
+
+        <div id="doctor-summary" class="doctor-summary"></div>
+        <div id="doctor-list" class="doctor-list">
+          <p class="empty">正在检查…（首次打开这页会自动跑一次）</p>
+        </div>
+
+        <div class="card">
+          <h3>环境</h3>
+          <div id="doctor-env" class="doctor-env"></div>
+          <div class="form-row">
+            <button id="btn-open-config-dir">打开配置文件夹</button>
+            <button id="btn-copy-config-dir">复制配置目录路径</button>
+            <span class="hint" id="doctor-path-hint"></span>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <div id="toast" class="toast" hidden></div>
+
+    <dialog id="export-dialog">
+      <div class="dialog-head">
+        <b id="export-title">导出节点</b>
+        <button id="btn-close-export">关闭</button>
+      </div>
+      <div id="export-body" class="export-body"></div>
+    </dialog>
+
+    <dialog id="config-dialog">
+      <div class="dialog-head">
+        <b>生成的 sing-box 配置</b>
+        <button id="btn-close-config">关闭</button>
+      </div>
+      <pre id="config-body"></pre>
+    </dialog>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>

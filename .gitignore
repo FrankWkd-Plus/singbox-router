@@ -1,0 +1,11 @@
+# 运行期数据（状态、生成的配置、缓存、日志、系统代理备份）
+data/
+
+# 下载下来的内核
+bin/
+
+# 可选的 proxy-utils 依赖
+vendor/*.mjs
+
+node_modules/
+*.log

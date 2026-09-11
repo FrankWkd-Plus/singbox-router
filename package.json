@@ -1,0 +1,15 @@
+{
+  "name": "singbox-router",
+  "version": "1.0.0",
+  "private": true,
+  "description": "基于 sing-box 的分流 Web 客户端：订阅/多格式节点导入、每节点独立端口分流、系统代理接管",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "core": "bash scripts/get-core.sh",
+    "test": "SBR_DATA_DIR=/tmp/sbr-selftest node scripts/selftest.mjs"
+  }
+}
