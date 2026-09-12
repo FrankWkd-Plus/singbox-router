@@ -1,28 +1,30 @@
 /* ============================================================================
    singbox-router 面板样式
-   设计取向：大圆角 + 柔和分层阴影 + 克制的动效。
-   类名与 app.js / index.html 完全对应，只改观感不动结构。
+   设计取向：「精密仪器」——信号青绿品牌色 + 冷灰底盘 + 等宽数字读数，
+   强表头弱行线，克制的动效。类名与 app.js / index.html 完全对应，只改观感不动结构。
    ========================================================================== */
 
 :root {
-  /* 层级：底 → 卡片 → 卡片内嵌 */
-  --bg: #f4f5f7;
+  /* 层级：底 → 卡片 → 卡片内嵌（冷灰，带极淡青倾向） */
+  --bg: #f3f5f6;
   --surface: #ffffff;
-  --surface-2: #f7f8fa;
-  --surface-3: #eef0f4;
+  --surface-2: #f6f8f9;
+  --surface-3: #ebeeef;
 
-  --border: #e5e8ed;
-  --border-strong: #d5dae2;
+  --border: #e3e8e9;
+  --border-strong: #d2dadc;
 
-  --text: #16181d;
-  --text-2: #5b6472;
-  --muted: #8a93a1;
+  --text: #1a1e21;
+  --text-2: #565f68;
+  --muted: #79838c;
 
-  --accent: #3b6ef5;
-  --accent-soft: #eaf0ff;
-  --ok: #12a150;
-  --warn: #d98216;
-  --err: #dc3c3c;
+  --accent: #0f766e;
+  --accent-soft: #e2f1ee;
+  --accent-ink: #ffffff;
+  --accent-2: #0891b2;
+  --ok: #127439;
+  --warn: #a04a07;
+  --err: #b92f2f;
 
   /* 圆角阶梯 */
   --r-lg: 16px;
@@ -41,23 +43,26 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #101215;
-    --surface: #191c21;
-    --surface-2: #1f232a;
-    --surface-3: #262b33;
+    --bg: #0e1214;
+    --surface: #161b1e;
+    --surface-2: #1d2327;
+    --surface-3: #252d31;
 
-    --border: #2a2f38;
-    --border-strong: #39404b;
+    --border: #2a3438;
+    --border-strong: #3b474c;
 
-    --text: #e8eaee;
-    --text-2: #a6aebc;
-    --muted: #78818f;
+    --text: #e6ebea;
+    --text-2: #a3b0b2;
+    --muted: #828d9b;
 
-    --accent: #5b8cff;
-    --accent-soft: #1c2740;
-    --ok: #2ecc71;
-    --warn: #e5a445;
-    --err: #f06a6a;
+    --accent: #30cbb4;
+    --accent-soft: #15332e;
+    /* 暗色下 accent 是亮青，上面放深字才有对比（白字只有 1.9:1） */
+    --accent-ink: #04211d;
+    --accent-2: #06b6d4;
+    --ok: #34d399;
+    --warn: #e8b04b;
+    --err: #f37171;
 
     --sh-1: 0 1px 2px rgb(0 0 0 / 0.3);
     --sh-2: 0 2px 6px rgb(0 0 0 / 0.35), 0 8px 20px rgb(0 0 0 / 0.3);
@@ -73,8 +78,15 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font: 14px/1.55 system-ui, -apple-system, "Microsoft YaHei UI", "Source Han Sans CN", sans-serif;
+  font: 13.5px/1.6 system-ui, -apple-system, "Segoe UI", "HarmonyOS Sans SC", "MiSans", "Microsoft YaHei UI", "Noto Sans CJK SC", sans-serif;
   -webkit-font-smoothing: antialiased;
+}
+
+/* 端口 / 延迟这类读数用等宽数字，纵向对齐 */
+table,
+.pill,
+input[type='number'] {
+  font-variant-numeric: tabular-nums;
 }
 
 code {
@@ -114,10 +126,11 @@ code {
   align-items: center;
   gap: 16px;
   flex-wrap: wrap;
-  padding: 13px 22px;
+  padding: 15px 24px;
   background: color-mix(in srgb, var(--surface) 88%, transparent);
   backdrop-filter: saturate(180%) blur(12px);
-  border-bottom: 1px solid var(--border);
+  /* 浮起代替贴边线 */
+  box-shadow: var(--sh-1);
   position: sticky;
   top: 0;
   z-index: 20;
@@ -135,21 +148,28 @@ code {
   display: grid;
   place-items: center;
   font-size: 19px;
-  color: #fff;
-  background: linear-gradient(140deg, var(--accent), color-mix(in srgb, var(--accent) 62%, #8b5cf6));
+  color: var(--accent-ink);
+  background: linear-gradient(145deg, var(--accent-2), var(--accent));
   border-radius: var(--r-md);
-  box-shadow: var(--sh-1);
+  box-shadow: var(--sh-1), inset 0 1px 0 rgb(255 255 255 / 0.25);
+  transition: transform var(--ease);
+}
+
+.brand:hover .logo {
+  transform: rotate(-6deg);
 }
 
 .title {
-  font-weight: 640;
-  font-size: 14.5px;
-  letter-spacing: -0.01em;
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: -0.015em;
 }
 
 .sub {
   color: var(--muted);
-  font-size: 11.5px;
+  font-size: 10.5px;
+  font-family: ui-monospace, "JetBrains Mono", Consolas, monospace;
+  letter-spacing: 0.02em;
 }
 
 .status-group {
@@ -160,15 +180,38 @@ code {
 }
 
 .pill {
-  font-size: 11.5px;
-  font-weight: 500;
-  padding: 4px 11px;
+  font-size: 11px;
+  font-weight: 550;
+  padding: 3px 10px;
   border-radius: var(--r-pill);
   border: 1px solid var(--border);
   background: var(--surface-2);
   color: var(--text-2);
   white-space: nowrap;
   transition: background var(--ease), color var(--ease), border-color var(--ease);
+}
+
+/* 状态指示灯：小圆点继承文字色，ghost（信息性 pill）不显示 */
+.pill:not(.ghost)::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  margin-right: 6px;
+  vertical-align: 1px;
+}
+
+/* 「内核运行中」的活体感——全页唯一无限动画 */
+.pill.on::before {
+  animation: breathe 2.4s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  50% {
+    opacity: 0.35;
+  }
 }
 
 .pill.ghost {
@@ -207,6 +250,7 @@ select,
 input,
 textarea {
   font: inherit;
+  font-size: 13px;
   color: var(--text);
   background: var(--surface);
   border: 1px solid var(--border-strong);
@@ -217,13 +261,16 @@ textarea {
 
 button {
   cursor: pointer;
-  font-weight: 500;
+  font-weight: 550;
+  background: var(--surface-2);
   box-shadow: var(--sh-1);
 }
 
+/* hover 不再变 accent 文字色：青色只留给 primary 和 focus ring，全站噪音减半 */
 button:hover:not(:disabled) {
-  border-color: var(--accent);
-  color: var(--accent);
+  background: var(--surface);
+  border-color: var(--border-strong);
+  color: var(--text);
 }
 
 button:active:not(:disabled) {
@@ -238,14 +285,19 @@ button:disabled {
 }
 
 button.primary {
-  background: var(--accent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 90%, #fff), var(--accent));
   border-color: var(--accent);
-  color: #fff;
+  color: var(--accent-ink);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--accent) 35%, transparent),
+    0 4px 12px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
 button.primary:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent) 88%, #000);
-  color: #fff;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 94%, #fff), var(--accent));
+  color: var(--accent-ink);
+  transform: translateY(-0.5px);
+  box-shadow: 0 2px 4px color-mix(in srgb, var(--accent) 40%, transparent),
+    0 6px 16px color-mix(in srgb, var(--accent) 28%, transparent);
 }
 
 button.danger:hover:not(:disabled) {
@@ -254,11 +306,20 @@ button.danger:hover:not(:disabled) {
   background: color-mix(in srgb, var(--err) 8%, transparent);
 }
 
+/* 表格操作列的按钮平时隐身，hover 才显形——让名称/延迟成为表格主角 */
 button.mini {
   padding: 4px 10px;
   font-size: 12px;
   border-radius: var(--r-sm);
+  background: transparent;
+  border-color: transparent;
   box-shadow: none;
+}
+
+button.mini:hover:not(:disabled) {
+  background: var(--surface-2);
+  border-color: var(--border-strong);
+  color: var(--text);
 }
 
 select {
@@ -306,8 +367,8 @@ input[type='checkbox'] {
 
 .tabs {
   display: flex;
-  gap: 4px;
-  padding: 8px 22px 0;
+  gap: 6px;
+  padding: 10px 26px 0;
   border-bottom: 1px solid var(--border);
   background: var(--surface);
   flex-wrap: wrap;
@@ -318,10 +379,11 @@ input[type='checkbox'] {
   box-shadow: none;
   background: none;
   color: var(--muted);
-  padding: 9px 15px;
-  border-radius: var(--r-md) var(--r-md) 0 0;
+  padding: 7px 16px;
+  border-radius: var(--r-pill);
   position: relative;
-  font-weight: 500;
+  font-weight: 550;
+  margin-bottom: 8px;
 }
 
 .tabs button:hover:not(.active) {
@@ -335,20 +397,12 @@ input[type='checkbox'] {
   font-weight: 600;
 }
 
-/* 下划线用伪元素画，两端带圆角 */
-.tabs button.active::after {
-  content: '';
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: -1px;
-  height: 2.5px;
-  background: var(--accent);
-  border-radius: var(--r-pill) var(--r-pill) 0 0;
+.tabs button:active {
+  transform: scale(0.97);
 }
 
 main {
-  padding: 20px 22px 64px;
+  padding: 24px 26px 72px;
   max-width: 1240px;
 }
 
@@ -395,16 +449,29 @@ main {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
-  padding: 18px 20px;
-  margin-bottom: 14px;
+  padding: 20px 22px;
+  margin-bottom: 16px;
   box-shadow: var(--sh-1);
 }
 
 .card h3 {
-  margin: 0 0 14px;
-  font-size: 13.5px;
-  font-weight: 640;
+  margin: 0 0 16px;
+  font-size: 15px;
+  font-weight: 650;
   letter-spacing: -0.01em;
+}
+
+/* 标题前的青色刻度条——全站唯一重复的品牌记号 */
+.card h3::before {
+  content: '';
+  display: inline-block;
+  width: 3px;
+  height: 14px;
+  margin-right: 9px;
+  border-radius: 2px;
+  background: var(--accent);
+  vertical-align: -2px;
+  opacity: 0.9;
 }
 
 .form-row {
@@ -428,7 +495,7 @@ main {
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(235px, 1fr));
-  gap: 13px;
+  gap: 14px;
 }
 
 .grid label,
@@ -479,20 +546,25 @@ table {
 th,
 td {
   text-align: left;
-  padding: 11px 14px;
-  border-bottom: 1px solid var(--border);
+  padding: 10px 14px;
+  /* 弱行线：正文行之间只留极淡的痕迹，层级反差交给表头底线 */
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
   white-space: nowrap;
 }
 
 th {
-  font-size: 11.5px;
-  color: var(--muted);
+  font-size: 11px;
+  color: var(--text-2);
   font-weight: 600;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.05em;
   background: var(--surface-2);
   position: sticky;
   top: 0;
   z-index: 1;
+  /* 表头底线用强色——「强表头、弱行线」的层级来源 */
+  border-bottom: 1px solid var(--border-strong);
+  padding-top: 9px;
+  padding-bottom: 9px;
 }
 
 tbody tr:last-child td {
@@ -565,14 +637,21 @@ input.name-input:hover {
   background: var(--surface-2);
 }
 
+input.name-input:focus {
+  border-color: var(--border-strong);
+  background: var(--surface);
+  box-shadow: var(--ring);
+}
+
 .type-badge {
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 500;
-  padding: 3px 9px;
+  padding: 2px 8px;
   border-radius: var(--r-pill);
   background: var(--surface-3);
   color: var(--text-2);
   border: 1px solid transparent;
+  letter-spacing: 0.02em;
 }
 
 .type-badge.badge-direct {
@@ -581,19 +660,25 @@ input.name-input:hover {
   background: color-mix(in srgb, var(--ok) 12%, transparent);
 }
 
+/* 延迟列是「读数」：等宽字体 + tabular-nums，纵向能对齐比较 */
+.delay-good,
+.delay-mid,
+.delay-bad {
+  font-family: ui-monospace, "JetBrains Mono", Consolas, monospace;
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .delay-good {
   color: var(--ok);
-  font-weight: 600;
 }
 
 .delay-mid {
   color: var(--warn);
-  font-weight: 600;
 }
 
 .delay-bad {
   color: var(--err);
-  font-weight: 600;
 }
 
 .empty {
@@ -726,23 +811,26 @@ input.name-input:hover {
   bottom: 26px;
   left: 50%;
   transform: translateX(-50%);
-  background: var(--surface);
-  border: 1px solid var(--border);
+  /* 双模式恒反色：亮色下深底浅字、暗色下浅底深字，两种模式都有高对比 */
+  background: color-mix(in srgb, var(--text) 94%, var(--accent));
+  color: var(--bg);
+  border: none;
   border-left: 3px solid var(--accent);
-  border-radius: var(--r-md);
+  border-radius: var(--r-lg);
   padding: 12px 20px;
   box-shadow: var(--sh-3);
   max-width: 80vw;
   white-space: pre-wrap;
   z-index: 100;
   font-size: 13px;
-  animation: toast-in 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  font-weight: 500;
+  animation: toast-in 220ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 @keyframes toast-in {
   from {
     opacity: 0;
-    transform: translate(-50%, 10px);
+    transform: translate(-50%, 14px);
   }
 }
 
@@ -752,6 +840,17 @@ input.name-input:hover {
 
 .toast.ok {
   border-left-color: var(--ok);
+}
+
+dialog[open] {
+  animation: pop 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
 }
 
 dialog {
@@ -899,7 +998,8 @@ tbody tr.row-off {
   display: none;
 }
 
-/* 标签页角标：有 err/warn 时在「排查」标签上显示数量 */
+/* 标签页角标：有 err/warn 时在「排查」标签上显示数量。
+   外圈描一层 surface 色，压在胶囊上时边缘干净 */
 .tab-badge {
   display: inline-block;
   min-width: 18px;
@@ -912,6 +1012,7 @@ tbody tr.row-off {
   text-align: center;
   color: #fff;
   background: var(--err);
+  box-shadow: 0 0 0 2px var(--surface);
 }
 
 .doctor-summary {
@@ -921,19 +1022,22 @@ tbody tr.row-off {
 .doctor-good,
 .doctor-bad {
   padding: 10px 14px;
-  border-radius: var(--radius, 10px);
+  border-radius: var(--r-md);
   border: 1px solid transparent;
+  border-left: 3px solid transparent;
   font-weight: 500;
 }
 
 .doctor-good {
   color: var(--ok);
+  border-left-color: var(--ok);
   border-color: color-mix(in srgb, var(--ok) 30%, transparent);
   background: color-mix(in srgb, var(--ok) 8%, transparent);
 }
 
 .doctor-bad {
   color: var(--err);
+  border-left-color: var(--err);
   border-color: color-mix(in srgb, var(--err) 30%, transparent);
   background: color-mix(in srgb, var(--err) 8%, transparent);
 }
@@ -946,29 +1050,32 @@ tbody tr.row-off {
 
 .doctor-item {
   padding: 12px 14px;
-  border-radius: var(--radius, 10px);
-  border: 1px solid var(--border, #ddd);
-  background: var(--bg-2, rgba(127, 127, 127, 0.06));
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
 }
 
 .doctor-item.lv-err {
   border-color: color-mix(in srgb, var(--err) 40%, transparent);
+  border-left: 3px solid var(--err);
   background: color-mix(in srgb, var(--err) 7%, transparent);
 }
 
 .doctor-item.lv-warn {
   border-color: color-mix(in srgb, var(--warn) 40%, transparent);
+  border-left: 3px solid var(--warn);
   background: color-mix(in srgb, var(--warn) 7%, transparent);
 }
 
 .doctor-item .doc-title {
-  font-size: 13px;
+  font-size: 13.5px;
+  font-weight: 600;
   margin-bottom: 4px;
 }
 
 .doctor-item .doc-detail {
   font-size: 12px;
-  color: var(--text-2, #666);
+  color: var(--text-2);
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -990,4 +1097,16 @@ tbody tr.row-off {
 .doc-env-row code {
   font-size: 12px;
   word-break: break-all;
+}
+
+/* ------------------------------------------------------------- 动效兜底 */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
