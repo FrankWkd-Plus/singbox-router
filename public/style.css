@@ -1110,3 +1110,130 @@ tbody tr.row-off {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ------------------------------------------------------------ 进程树选择器 */
+
+/* 进程栏标题行：说明文字 + 「从运行中的进程选择」按钮 同一行排 */
+.label-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+#process-dialog[open] {
+  width: 640px;
+  display: flex;
+  flex-direction: column;
+}
+
+#process-search {
+  margin: 14px 18px 0;
+}
+
+#process-dialog > .hint {
+  margin: 8px 18px 0;
+}
+
+.process-tree {
+  margin: 10px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  overflow: auto;
+  max-height: 50vh;
+  min-height: 160px;
+  background: var(--surface-2);
+}
+
+.process-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+  white-space: nowrap;
+}
+
+.process-row:last-child {
+  border-bottom: none;
+}
+
+.process-row:hover {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.process-row.selected {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+/* 展开箭头：无子进程时占位对齐 */
+.process-arrow {
+  flex: none;
+  width: 16px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 10px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.process-arrow.leaf {
+  cursor: default;
+  visibility: hidden;
+}
+
+.process-name {
+  flex: none;
+  font-weight: 600;
+}
+
+.process-pid {
+  flex: none;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.process-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--muted);
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 11px;
+}
+
+/* 「仅此进程」：hover 才显形，跟表格操作列一个思路 */
+.process-row .only {
+  flex: none;
+  visibility: hidden;
+}
+
+.process-row:hover .only {
+  visibility: visible;
+}
+
+.dialog-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.dialog-foot .hint {
+  margin: 0;
+}
+
+.process-empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--muted);
+}

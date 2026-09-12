@@ -1087,6 +1087,191 @@ $('#btn-view-config').addEventListener('click', async () => {
 })
 $('#btn-close-config').addEventListener('click', () => $('#config-dialog').close())
 
+// ------------------------------------------------- 进程树选择器（btop 式）
+// 勾父进程 = 勾整棵子树；「仅此进程」给只要单个的场景。
+// 每次打开重新拉 /api/processes —— 进程在变，缓存没有意义。
+
+let procNodes = [] // 平铺 {pid, ppid, name, path, depth}，按 pid 升序
+let procChildren = new Map() // pid -> [子节点]
+let procRoots = []
+const procSelected = new Set() // 选中的 pid（勾子树时整棵都进来）
+const procExpanded = new Set() // 展开状态的 pid
+
+function buildProcTree(list) {
+  procNodes = list
+  procChildren = new Map()
+  const byPid = new Map(list.map((n) => [n.pid, n]))
+  procRoots = []
+  for (const n of list) {
+    const parent = n.ppid !== n.pid ? byPid.get(n.ppid) : null
+    if (parent) {
+      if (!procChildren.has(n.ppid)) procChildren.set(n.ppid, [])
+      procChildren.get(n.ppid).push(n)
+    } else {
+      procRoots.push(n) // 父进程已退出 / 被过滤 = 根
+    }
+  }
+  const setDepth = (n, depth) => {
+    n.depth = depth
+    for (const c of procChildren.get(n.pid) || []) setDepth(c, depth + 1)
+  }
+  for (const r of procRoots) setDepth(r, 0)
+}
+
+function subtreeOf(node) {
+  const out = []
+  const walk = (n) => {
+    out.push(n)
+    for (const c of procChildren.get(n.pid) || []) walk(c)
+  }
+  walk(node)
+  return out
+}
+
+function toggleSubtree(node, on) {
+  for (const n of subtreeOf(node)) {
+    if (on) procSelected.add(n.pid)
+    else procSelected.delete(n.pid)
+  }
+  renderProcTree()
+}
+
+function procRow(n) {
+  const kids = procChildren.get(n.pid) || []
+  const checked = procSelected.has(n.pid)
+  const indent = `margin-left:${n.depth * 14}px`
+
+  const cb = el('input', { type: 'checkbox', title: '勾选 = 该进程及其全部子进程' })
+  cb.checked = checked
+  if (!checked && kids.length) {
+    // 半选态：子树里选了一部分（比如先用「仅此进程」挑过几个）
+    cb.indeterminate = subtreeOf(n).some((x) => x !== n && procSelected.has(x.pid))
+  }
+  cb.addEventListener('change', () => toggleSubtree(n, cb.checked))
+
+  const arrow = kids.length
+    ? el('button', {
+        class: 'process-arrow',
+        type: 'button',
+        style: indent,
+        text: procExpanded.has(n.pid) ? '▾' : '▸',
+        title: '展开 / 折叠',
+        onclick: () => {
+          if (procExpanded.has(n.pid)) procExpanded.delete(n.pid)
+          else procExpanded.add(n.pid)
+          renderProcTree()
+        }
+      })
+    : el('span', { class: 'process-arrow leaf', style: indent, text: '·' })
+
+  return el(
+    'div',
+    { class: 'process-row' + (checked ? ' selected' : '') },
+    arrow,
+    cb,
+    el('span', { class: 'process-name', text: n.name }),
+    el('span', { class: 'process-pid', text: String(n.pid) }),
+    el('span', { class: 'process-path', title: n.path || '', text: n.path || '（读不到路径，按进程名匹配）' }),
+    el('button', {
+      class: 'mini only',
+      type: 'button',
+      text: '仅此进程',
+      title: '只选这一个，不带子进程',
+      onclick: () => {
+        if (procSelected.has(n.pid)) procSelected.delete(n.pid)
+        else procSelected.add(n.pid)
+        renderProcTree()
+      }
+    })
+  )
+}
+
+function renderProcTree() {
+  const filter = $('#process-search').value.trim().toLowerCase()
+  const rows = []
+
+  // 搜索时只显示命中的行 + 祖先链，展开状态一律视为展开
+  let visible = null
+  if (filter) {
+    visible = new Set()
+    const byPid = new Map(procNodes.map((n) => [n.pid, n]))
+    for (const n of procNodes) {
+      if (!n.name.toLowerCase().includes(filter) && !(n.path || '').toLowerCase().includes(filter)) continue
+      let cur = n
+      while (cur && !visible.has(cur.pid)) {
+        visible.add(cur.pid)
+        cur = byPid.get(cur.ppid)
+        if (cur && cur.ppid === cur.pid) break // 自成环的保护，理论上到不了
+      }
+    }
+  }
+
+  const walk = (n) => {
+    if (!visible || visible.has(n.pid)) rows.push(procRow(n))
+    if (visible || procExpanded.has(n.pid)) {
+      for (const c of procChildren.get(n.pid) || []) walk(c)
+    }
+  }
+  for (const r of procRoots) walk(r)
+
+  const box = $('#process-tree')
+  if (rows.length) box.replaceChildren(...rows)
+  else
+    box.replaceChildren(
+      el('p', { class: 'process-empty', text: filter ? '没有匹配的进程' : '没有拿到进程列表' })
+    )
+  $('#process-count').textContent = `已选 ${procSelected.size} 项`
+}
+
+$('#btn-pick-process').addEventListener('click', async () => {
+  $('#process-search').value = ''
+  $('#process-count').textContent = '已选 0 项'
+  $('#process-tree').replaceChildren(el('p', { class: 'process-empty', text: '读取进程列表…' }))
+  $('#process-dialog').showModal()
+  try {
+    const data = await api('/api/processes')
+    const list = (data && data.processes) || []
+    if (!list.length) {
+      $('#process-tree').replaceChildren(el('p', { class: 'process-empty', text: '没读到任何进程（/proc 不可用？）' }))
+      return
+    }
+    procSelected.clear()
+    procExpanded.clear()
+    buildProcTree(list)
+    // 默认展开前两层，先看个大概；要找的具体程序靠搜索框
+    for (const n of procNodes) if (n.depth < 2 && procChildren.has(n.pid)) procExpanded.add(n.pid)
+    renderProcTree()
+  } catch (e) {
+    $('#process-tree').replaceChildren(el('p', { class: 'process-empty', text: `读取失败：${e.message}` }))
+  }
+})
+
+$('#process-search').addEventListener('input', renderProcTree)
+$('#btn-close-process').addEventListener('click', () => $('#process-dialog').close())
+
+$('#btn-process-fill').addEventListener('click', () => {
+  if (!procSelected.size) {
+    toast('先勾选要加进规则的进程', 'err')
+    return
+  }
+  // 有 exe 路径用路径（process_path 精确匹配，最稳）；读不到路径回退进程名
+  const seen = new Set()
+  const values = []
+  for (const n of procNodes) {
+    if (!procSelected.has(n.pid)) continue
+    const v = n.path || n.name
+    if (!seen.has(v)) {
+      seen.add(v)
+      values.push(v)
+    }
+  }
+  const ta = $('#rule-process')
+  const cur = ta.value.replace(/\s+$/, '')
+  ta.value = cur ? `${cur}\n${values.join('\n')}` : values.join('\n')
+  $('#process-dialog').close()
+  toast(`已填入 ${values.length} 个进程，选好去向后点「添加规则」`)
+})
+
 // ------------------------------------------------------------------- 日志
 
 const logBox = $('#logs')

@@ -140,6 +140,7 @@ rulesets/*.srs          GeoIP / GeoSite 规则集
 | POST | `/api/nodes/reassign-ports` | 从起始值重排全部端口 |
 | POST | `/api/nodes/:id/test` · `/api/nodes/test-all` | 延迟测试(经 Clash API,需内核在跑) |
 | POST | `/api/rules` | `{domain?, ip?, process?, target, note?}` 新增分流规则(域名/IP/进程任意组合,校验不过返回 400) |
+| GET | `/api/processes` | 运行中的进程清单 `[{pid, ppid, name, path}]`(读 `/proc`,零子进程 fork),规则页进程树选择器的数据源 |
 | PATCH | `/api/rules/:id` | 改规则;只带 `enabled` 时不重新校验内容 |
 | DELETE | `/api/rules/:id` | 删除规则 |
 | POST | `/api/rules/reorder` | `{ids}` 按给定顺序重排 —— **顺序即优先级** |

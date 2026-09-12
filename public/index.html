@@ -97,7 +97,10 @@
             <label>IP / 网段（每行一个，只认 CIDR，不支持正则）
               <textarea id="rule-ip" rows="3" spellcheck="false" placeholder="198.51.100.7&#10;10.0.0.0/8"></textarea>
             </label>
-            <label>进程（进程名 / 完整路径 / 路径正则，正则自动识别）
+            <label>
+              <span class="label-line">进程（进程名 / 完整路径 / 路径正则，正则自动识别）
+                <button id="btn-pick-process" class="mini" type="button" title="像 btop 那样按进程树勾选，比如把微信整棵子树加进规则">从运行中的进程选择…</button>
+              </span>
               <textarea id="rule-process" rows="3" spellcheck="false" placeholder="telegram-desktop&#10;/usr/bin/curl&#10;^/usr/lib/firefox/"></textarea>
             </label>
           </div>
@@ -115,7 +118,8 @@
             进程栏直接写正则就行（含 <code>^</code> <code>$</code> <code>.</code> <code>*</code> 等符号自动识别，如 <code>^/usr/lib/firefox/</code>）。
             语法按 Go RE2 —— 不支持前后向断言和反向引用，保存时会先校验。
             <b>IP 只能写 CIDR</b>：sing-box 的 IP 匹配走前缀树，没有正则。
-            进程匹配对 TUN 和本地代理端口（系统代理）都有效。
+            进程规则要<b>流量先经过内核</b>才生效 —— TUN 或系统代理都行；
+            不认系统代理的程序（Telegram、CLI 工具）得开 TUN 才会被进程规则捕获。
           </p>
         </div>
 
@@ -376,6 +380,23 @@
         <button id="btn-close-config">关闭</button>
       </div>
       <pre id="config-body"></pre>
+    </dialog>
+
+    <dialog id="process-dialog">
+      <div class="dialog-head">
+        <b>从运行中的进程选择</b>
+        <button id="btn-close-process">关闭</button>
+      </div>
+      <input id="process-search" type="search" placeholder="按名称或路径筛选，如 wechat…" />
+      <p class="hint">
+        勾选父进程 = 选中它<b>整棵子树</b>（比如微信主进程一勾，全部 helper 进程都进来）；
+        只要单个就点行尾的「仅此进程」。
+      </p>
+      <div id="process-tree" class="process-tree"></div>
+      <div class="dialog-foot">
+        <span id="process-count" class="hint">已选 0 项</span>
+        <button id="btn-process-fill" class="primary">填入规则</button>
+      </div>
     </dialog>
 
     <script src="/app.js" type="module"></script>

@@ -174,6 +174,9 @@ class Tray:
         self.state = None
         self.reachable = False
         self.window = None
+        # 状态快照（JSON）：与上次相同时跳过整菜单重建
+        self.last_state_json = None
+        self.last_reachable = None
         # 切换节点时会触发刷新，避免刷新回调把用户刚选的项覆盖回去
         self.busy = False
         self.refresh()
@@ -193,6 +196,17 @@ class Tray:
         except Exception:
             self.state = None
             self.reachable = False
+        # 状态没变就不重建菜单。整菜单拆掉重建（几百个 GTK widget）是托盘
+        # 常驻 CPU 抖动的大头，每 5s 来一次纯属浪费；对比一次 JSON 字符串
+        # 便宜得多。可达性单独记 —— 状态都是 None 时 JSON 恒等，得靠它区分
+        try:
+            snapshot = json.dumps(self.state, sort_keys=True, ensure_ascii=False)
+        except TypeError:
+            snapshot = None  # 理论上到不了，保守起见当作"有变化"处理
+        if snapshot == self.last_state_json and self.reachable == self.last_reachable:
+            return
+        self.last_state_json = snapshot
+        self.last_reachable = self.reachable
         self.render()
 
     # ---------------------------------------------------------------- 渲染

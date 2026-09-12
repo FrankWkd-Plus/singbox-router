@@ -154,15 +154,17 @@ function parseIps(raw) {
 /**
  * 进程栏：三种写法自动识别，不用记前缀 ——
  *   `re:` 前缀     → 显式声明这是路径正则
- *   含正则元字符    → 自动按路径正则处理（^ $ . * + ? ( ) [ ] { } | \ / 之外都是普通字符）
+ *   含正则元字符    → 自动按路径正则处理（^ $ * + ? ( ) [ ] { } | \ 之外都是普通字符）
  *   其余以 / 开头   → 完整路径精确匹配
  *   其余            → 进程名精确匹配
  *
  * 「正则元字符」的判定故意保守：路径里合法出现的字符（字母数字 _ - . 空格等）
- * 都不算元字符，所以 /usr/bin/curl 不会误判；而 ^/usr/lib/firefox/、
- * ^.*telegram 这类一看就是正则的写法直接生效，用户不用学 re: 语法。
+ * 都不算元字符，所以 /usr/bin/curl、/opt/brave.com/brave/brave、
+ * /opt/wechat/wechat-4.0.0.30 这些带点的真实路径不会被误判；
+ * 而 ^/usr/lib/firefox/、^.*telegram 这类一看就是正则的写法直接生效，
+ * 用户不用学 re: 语法。光用 . 一个元字符的正则（如 wechat.helper）请加 re: 前缀。
  */
-const REGEX_META = /[\\^$.*+?()[\]{}|]/
+const REGEX_META = /[\\^$*+?()[\]{}|]/
 
 function parseProcesses(raw) {
   const name = []

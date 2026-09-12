@@ -192,12 +192,13 @@ export function staleTunState() {
  * 子进程探测的短缓存。
  *
  * staleTunState（2 个 ip 子进程）和 globalProxyConflicts（1 个 ps 子进程）
- * 都是给 status() 用的，而 status() 挂在 /api/state 上 —— 面板每 15s 轮询一次，
- * 每个打开的页面每次轮询都白 fork 三个子进程，是常驻 CPU 抖动的主要来源。
- * 5 秒缓存对「提示用户有冲突/残留」这种展示型信息完全够用；
+ * 都是给 status() 用的，而 status() 挂在 /api/state 上 —— 托盘每 5s、面板
+ * 每 15s 轮询一次，每个打开的页面每次轮询都白 fork 三个子进程，是常驻
+ * CPU 抖动的主要来源。15 秒缓存对「提示用户有冲突/残留」这种展示型信息
+ * 完全够用（问题不会 15s 内自己出现又消失）；
  * start()/stop() 这类真正要拿探测结果做决策的路径强制绕过缓存。
  */
-const PROBE_TTL = 5000
+const PROBE_TTL = 15000
 let probeCache = { at: 0, stale: [], conflicts: [] }
 
 function probeResults(force = false) {
@@ -371,6 +372,8 @@ export async function start() {
     stdio: ['ignore', 'pipe', 'pipe']
   })
   proc = child
+  // 新内核实例：Clash API 的展示缓存全部作废
+  clashCache = { at: 0, proxy: null, mode: null }
   startedAt = Date.now()
 
   child.stdout.on('data', lineSplitter((l) => pushLog(l)))
@@ -447,6 +450,7 @@ export async function stop() {
 
   proc = null
   startedAt = null
+  clashCache = { at: 0, proxy: null, mode: null }
 
   // TUN 退出后必须确认路由已还原，残留会导致整机断网。
   // 内核刚停，绕过缓存重新探测
@@ -504,6 +508,8 @@ export async function testDelay(tag) {
 
 /** 切换主端口所用节点 */
 export async function selectProxy(name) {
+  // 切完立刻有人来问 currentProxy —— 不能吃到切换前的缓存
+  clashCache = { at: 0, proxy: null, mode: null }
   return clashApi('/proxies/proxy', {
     method: 'PUT',
     body: JSON.stringify({ name }),
@@ -511,11 +517,22 @@ export async function selectProxy(name) {
   })
 }
 
+/**
+ * currentProxy / currentMode 的微缓存。这两个只喂展示（面板顶栏、托盘标签），
+ * 却挂在 /api/state 上被托盘每 5s 轮询一次 —— 每轮都是 2 个 Clash API HTTP
+ * 往返。4s 缓存省掉大部分往返；写操作（selectProxy / setMode）和内核启停
+ * 会清缓存，保证切换后 UI 立即反映。
+ */
+const CLASH_CACHE_TTL = 4000
+let clashCache = { at: 0, proxy: null, mode: null }
+
 export async function currentProxy() {
   if (!proc) return null
+  if (Date.now() - clashCache.at < CLASH_CACHE_TTL) return clashCache.proxy
   try {
     const r = await clashApi('/proxies/proxy')
-    return r ? r.now : null
+    clashCache = { ...clashCache, at: Date.now(), proxy: r ? r.now : null }
+    return clashCache.proxy
   } catch {
     return null
   }
@@ -523,6 +540,7 @@ export async function currentProxy() {
 
 /** rule / global / direct */
 export async function setMode(mode) {
+  clashCache = { at: 0, proxy: null, mode: null }
   return clashApi('/configs', {
     method: 'PATCH',
     body: JSON.stringify({ mode }),
@@ -532,9 +550,11 @@ export async function setMode(mode) {
 
 export async function currentMode() {
   if (!proc) return null
+  if (Date.now() - clashCache.at < CLASH_CACHE_TTL) return clashCache.mode
   try {
     const r = await clashApi('/configs')
-    return r ? String(r.mode || '').toLowerCase() : null
+    clashCache = { ...clashCache, at: Date.now(), mode: r ? String(r.mode || '').toLowerCase() : null }
+    return clashCache.mode
   } catch {
     return null
   }

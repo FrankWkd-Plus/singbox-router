@@ -18,6 +18,7 @@ import * as setup from './src/setup.js'
 import * as doctor from './src/doctor.js'
 import * as ruleset from './src/ruleset.js'
 import * as termproxy from './src/termproxy.js'
+import { listProcesses } from './src/processes.js'
 import { openDir } from './src/open.js'
 import { buildConfig, validate, isDirectNode } from './src/config.js'
 import { validateRule, RULE_TARGETS, describeRule } from './src/rules.js'
@@ -451,6 +452,11 @@ async function handleApi(req, res, url) {
     const { on } = await readBody(req)
     const r = on ? termproxy.apply() : termproxy.restore()
     return json(res, r.ok ? 200 : 400, r)
+  }
+
+  // ---- 运行中的进程清单（规则页进程树选择器用）----
+  if (p === '/api/processes' && method === 'GET') {
+    return json(res, 200, { processes: listProcesses() })
   }
 
   // ---- 打开配置文件夹 ----
