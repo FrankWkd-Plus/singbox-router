@@ -45,6 +45,29 @@ For the mechanism (route rule ordering, and why port bindings must outrank the m
 
 ---
 
+## Why not Clash / v2rayN
+
+Clash has the mature ecosystem, cross-platform support and the best subscription compatibility; v2rayN is feature-rich and flexible. **If you want "one port, auto-splitting by rules, works everywhere", they are the right choice.** This project answers a different question:
+
+> On a Linux desktop, I want different programs to exit through different nodes *at the same time* — and I want to be able to explain, for every connection, how it was routed.
+
+| Need | Clash (Verge / mihomo) | v2rayN / v2rayA | singbox-router |
+| --- | --- | --- | --- |
+| Several nodes in use at once (Telegram → HK, git → JP, browser → US) | Hand-write listeners + proxy-groups; subscription updates clobber them | Basically no | ✅ **Every node gets its own port automatically** |
+| Force one app to stay direct (banking, intranet) | Rules, guessing domains | Rules | ✅ Virtual **[DIRECT] node**: point the app at a port, it stays direct **in every mode** |
+| Predictable rules | Thousands of geosite entries, silent misses | Same | ✅ Only the rules you wrote; **list order = priority** |
+| Regex on domain / process-path | mihomo supports it | Depends on core | ✅ Validated as Go RE2 **when you save**, not when the core fails to start |
+| Coexisting with another sing-box client's TUN | Default route indices collide | Default route indices collide | ✅ **Deliberately offset** (table 2023 / rule 9100); recovery only ever touches its own resources |
+| TUN broke the network | Dig through docs to clean routes | Same | ✅ One-click recovery — in the doctor tab, and in the tray when the panel is unreachable |
+| Debugging "why is this broken" | Read logs, ask around | Same | ✅ **15-point checkup** with one-click fixes where possible |
+| CLI proxying | Manual `export` | Manual `export` | ✅ One-click terminal takeover (source snippet in your shell rc) |
+| Resident memory | Hundreds of MB (Electron shell) | Implementation-dependent | ✅ **182MB** measured, core included |
+| Cross-platform | ✅ | ✅ (Windows-first) | ❌ **Linux desktop only** (gsettings / GTK / systemd) |
+
+The one-line summary: **Clash perfected "guessing automatically"; this project perfects "specifying explicitly."** The rule engine exists here too, but it always ranks below port bindings — an explicit choice is never silently overridden by a guess.
+
+---
+
 ## Quick start
 
 Requires **Node >= 20** and **sing-box >= 1.12** (the generated config uses the 1.12 schema: new DNS server format, `action` fields; older cores fail to start on unknown fields).
@@ -59,7 +82,7 @@ node server.js                  # start the panel
 
 Open <http://127.0.0.1:8899> → add nodes via *Subscription* or *Import* → click *Start*.
 
-All runtime data (state, subscription tokens, node credentials, rule sets) is written to **`~/.config/singbox-router`**, not the program directory — the repository is desensitized by construction and `git status` stays clean. *Settings → data directory* in the panel and the tray menu both have *Open config folder*. State from older installs under `data/` is **copied** over on first start (the original is left in place).
+All runtime data (state, subscription tokens, node credentials, rule sets) is written to **`~/.singbox-router`**, not the program directory — the repository is desensitized by construction and `git status` stays clean. *Settings → data directory* in the panel and the tray menu both have *Open config folder*. State from older installs under `data/` is **copied** over on first start (the original is left in place; `~/.cache` is deliberately avoided — subscription tokens don't belong where cleanup tools roam).
 
 If the download is blocked:
 
@@ -84,7 +107,7 @@ singbox-router-get-core          # the core isn't in the package (tens of MB, pe
 bash scripts/install-app.sh
 ```
 
-Don't use both — the two installs use the same service and autostart filenames, and the copy in your home directory shadows the system one, which leaves the `.deb`'s copy inert. Data lives in `~/.config/singbox-router` either way, so switching install methods keeps your nodes. Details in **[docs/desktop.md](docs/desktop.md)**.
+Don't use both — the two installs use the same service and autostart filenames, and the copy in your home directory shadows the system one, which leaves the `.deb`'s copy inert. Data lives in `~/.singbox-router` either way, so switching install methods keeps your nodes. Details in **[docs/desktop.md](docs/desktop.md)**.
 
 ---
 
@@ -100,7 +123,9 @@ Don't use both — the two installs use the same service and autostart filenames
 | **TUN mode** | Captures programs that ignore the system proxy (Telegram, CLI tools). No root, no password prompts | [tun](docs/tun.md) |
 | **Custom rules** | Process / IP / website; domains and process paths **support regex**; list order is priority | [splitting](docs/splitting.md#自定义分流规则) |
 | **China auto-direct** | Optional. GeoIP + GeoSite hits go direct; rule sets are downloaded to disk first, then referenced | [splitting](docs/splitting.md#国内自动分流) |
-| **Config directory** | State, credentials and rule sets all live in `~/.config/singbox-router` — no sensitive data in the program directory | [reference](docs/reference.md#目录结构) |
+| **Doctor** | 15-point checkup (permissions, conflicts, stale TUN routes, ports, config…); fixable issues get a one-click button. The copyable report contains **no nodes, subscription URLs or secrets** | — |
+| **Terminal proxy** | One-click takeover: a source snippet in your shell rc, with liveness checks — new terminals proxy automatically | — |
+| **Config directory** | State, credentials and rule sets all live in `~/.singbox-router` — no sensitive data in the program directory | [reference](docs/reference.md#目录结构) |
 | **Desktop app** | systemd user service + tray + WebKitGTK window, 182MB resident; can be built as a `.deb` | [desktop](docs/desktop.md) |
 | **HTTP API** | What the panel itself uses; loopback-only, with Host / Origin validation | [reference](docs/reference.md#http-api) |
 
@@ -150,12 +175,15 @@ The topic docs are in Chinese; this page is the English overview.
 
 Linux Mint 22.3 / Cinnamon / Node 22 / **sing-box 1.13.18**:
 
-- `npm test` — **77 assertions** (both the proxy-utils path and the built-in parser path). The assertions added for custom rules and geo splitting haven't been run on hardware yet; results will be filled in after that run.
+- `npm test` — **77 assertions, passing both with and without proxy-utils loaded** (the two parser paths)
 - `sing-box check` accepts the generated config in all three shapes (proxy-only / TUN / with a direct node)
 - **Per-node splitting works**: 5 ports produced 5 distinct exit IPs
 - **The virtual [DIRECT] node works**: its port exits via the real ISP address while proxy ports simultaneously show datacenter IPs
 - **Port bindings outrank the mode switch**: tested in all three modes (`rule` / `global` / `direct`), no binding was overridden
-- **Rootless TUN works**: the core runs as a normal user (`setcap`), no program is configured with a proxy, and global traffic plus DNS behave normally
+- **Rootless TUN works**: the core runs as a normal user (`setcap`), no program is configured with a proxy, and global traffic plus DNS behave normally; TUN coexists with per-node ports and direct nodes
+- **TUN pre-flight checks, verified against a live v2rayN TUN**: conflict detected and startup refused — and v2rayN's active rules are *not* misreported as our leftovers (ours are table 2023 / rule 9100; the sing-box defaults, used by v2rayN, are 2022 / 9000)
+- **Graceful stop**: `systemctl --user stop` finishes in 0.23s — TUN device gone, zero stale policy routes, system proxy restored
+- **Doctor**: 15 checks and the 8 whitelisted fix actions wired to both the panel and the tray
 - **polkit scope is tight**: `pkcheck` confirms the four `resolve1` actions are allowed while a control action still requires authorization
 - System proxy takeover → restore leaves all 11 gsettings keys byte-identical to their pre-takeover values
 - Crash recovery: restarting the panel with a leftover takeover state detects the backup and restores it
@@ -163,7 +191,7 @@ Linux Mint 22.3 / Cinnamon / Node 22 / **sing-box 1.13.18**:
 
 > Troubleshooting note: on a direct path, `1.1.1.1` and Cloudflare-hosted endpoints (including `api.ipify.org`) may time out or get RST. That's link interference, not this program. To verify a direct route, use a domestic target such as `myip.ipip.net` or `cip.cc`.
 
-**Not yet run on hardware:** custom split rules, China auto-direct, *open config folder*, the data-directory migration, and `.deb` packaging. The code and assertions are written but haven't been executed; results will be filled in after that run. Until then, treat them as unverified.
+**Not re-verified after the repository merge:** the `.deb` packaging path (`build-deb.sh`). The script is intact and syntax-checked; run it once before relying on it.
 
 ---
 

@@ -11,7 +11,7 @@
 
 > **两种别同时用。**两边的 systemd 单元与 autostart 项**文件名相同**,而用户目录里的那份会盖住系统目录里的那份 —— 于是 `.deb` 装的那份变成哑的,服务实际指向的是源码目录;`~/.local/bin/singbox-router` 和 `/usr/bin/singbox-router` 谁生效则取决于 PATH 顺序。真正会咬人的是之后把源码目录挪走或删掉:服务还指着它,而系统里那份被盖着不会顶上来。`.deb` 里因此刻意不含 `install-app.sh`。
 
-不管哪种装法,**运行期数据都在 `~/.config/singbox-router`**,换装法不会丢节点和设置。
+不管哪种装法,**运行期数据都在 `~/.singbox-router`**,换装法不会丢节点和设置。
 
 **不用 Chromium 也不用 Electron。** 面板窗口走 WebKitGTK,渲染的是同一套 web UI,外观一行不改,但常驻内存从 910MB 降到 182MB。
 
@@ -36,7 +36,7 @@ sudo apt install ./dist/singbox-router_1.0.0-1_all.deb
 | `/usr/share/applications/…` | 开始菜单入口 |
 | `/etc/xdg/autostart/…-tray.desktop` | 登录时起托盘(登记为 conffile,升级不覆盖你的改动) |
 | `/usr/share/doc/singbox-router/` | README、`docs/`、`README.Debian` |
-| `~/.config/singbox-router/` | 你的设置、节点、订阅凭据、规则集 |
+| `~/.singbox-router/` | 你的设置、节点、订阅凭据、规则集 |
 
 内核**不在包里**(几十 MB、按架构分发、还要单独 `setcap`),装完补一条:
 
@@ -56,7 +56,7 @@ singbox-router-get-core        # 落到 ~/.local/bin/sing-box
 卸载:
 
 ```bash
-sudo apt remove singbox-router        # 保留 ~/.config/singbox-router
+sudo apt remove singbox-router        # 保留 ~/.singbox-router
 sudo apt purge  singbox-router        # 同样保留 —— 里面是你的订阅凭据,不该被卸包抹掉
 ```
 
@@ -125,7 +125,7 @@ Chrome 方案(之前)          910 MB      910 MB
 
 - **关掉面板窗口、甚至退出托盘,都不会断网** —— 内核由服务托管,只有点「停止内核」或 `systemctl --user stop` 才会停
 - 托盘只是遥控器,所有操作都走面板的本地 HTTP API,它自己不碰 sing-box
-- 日常操作托盘全包了:启停内核 / 切主端口节点 / 切分流模式 / 复制节点端口 / 开面板。只有改端口、导入节点、调设置才需要开面板
+- 日常操作托盘全包了:启停内核 / 切主端口节点 / 切分流模式 / 复制节点端口 / 开面板。维护类的事(下载内核、下载规则集、授权 TUN、断网急救、重启网络、终端代理、复制诊断报告)都在「维护」子菜单里 —— 网断了、面板打不开时这条路也还在。只有改端口、导入节点、调设置才需要开面板
 - 托盘标签会显示当前节点,有问题时(TUN 权限未就绪、检测到冲突、配置已变更待应用)直接标出来
 
 ## 开机自启
@@ -181,4 +181,4 @@ python3 /usr/lib/singbox-router/app/window.py
 sudo apt remove singbox-router
 ```
 
-卸载脚本按项目约定不用 `rm`,移除的文件统一移到 `~/.trash`,误删了还能捞回来。内核的 capability 与 polkit 规则不会被动(TUN 仍可用),脚本末尾会打印手动清理它们的命令。`.deb` 的卸载同理:不碰内核、不碰 `~/.config/singbox-router`。
+卸载脚本按项目约定不用 `rm`,移除的文件统一移到 `~/.trash`,误删了还能捞回来。内核的 capability 与 polkit 规则不会被动(TUN 仍可用),脚本末尾会打印手动清理它们的命令。`.deb` 的卸载同理:不碰内核、不碰 `~/.singbox-router`。

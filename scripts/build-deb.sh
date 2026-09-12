@@ -271,9 +271,12 @@ EOF
 
 cat > "$PKG/usr/bin/$APP_ID-get-geoip" <<EOF
 #!/usr/bin/env bash
-# 下载国内自动分流用的 GeoIP / GeoSite 规则集到 ~/.config/$APP_ID/rulesets
+# 下载国内自动分流用的 GeoIP / GeoSite 规则集到 ~/.singbox-router/rulesets。
+# 下载逻辑在 src/ruleset.js（面板里的按钮走的就是它），这里借 cli.mjs 从命令行调用。
 set -euo pipefail
-exec bash $PREFIX/scripts/get-geoip.sh "\$@"
+source "$PREFIX/pkg/find-node.sh"
+NODE_BIN="\$(sbr_find_node)" || exit 1
+exec "\$NODE_BIN" "$PREFIX/scripts/cli.mjs" get-geoip "\$@"
 EOF
 
 cat > "$PKG/usr/bin/$APP_ID-setup-tun" <<EOF

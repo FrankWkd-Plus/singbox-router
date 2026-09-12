@@ -48,19 +48,19 @@ Linux 桌面走 `gsettings`(Cinnamon / GNOME / MATE / Xfce 等)。点「接管�
 
 三条安全约定:
 
-1. **改之前把原值原样备份到磁盘**(`~/.config/singbox-router/sysproxy-backup.json`),不是只存内存
+1. **改之前把原值原样备份到磁盘**(`~/.singbox-router/sysproxy-backup.json`),不是只存内存
 2. **内核意外退出会自动还原**,不会让机器留在「代理指向一个已死端口」的断网状态
 3. **面板进程启动时检查残留备份**并自动还原 —— 上次异常退出也能救回来
 
 `gsettings` 管不到命令行程序,所以接管时会生成一份 export 片段:
 
 ```bash
-source ~/.config/singbox-router/proxy-env.sh
+source ~/.singbox-router/proxy-env.sh
 ```
 
 ## 数据目录
 
-所有运行期数据都在 **`~/.config/singbox-router`**(遵循 XDG,`XDG_CONFIG_HOME` 生效时以它为基):
+所有运行期数据都在 **`~/.singbox-router`**(`SBR_DATA_DIR` 可显式覆盖):
 
 ```
 state.json              设置 / 订阅 / 节点 / 自定义规则(原子写入:写临时文件再 rename)
@@ -71,13 +71,13 @@ cache.db                内核自己的缓存
 rulesets/*.srs          GeoIP / GeoSite 规则集
 ```
 
-**程序目录里不再有任何运行期数据。**订阅 token、节点凭据、规则集都在家目录下,所以仓库天然是脱敏的 —— 克隆一份代码不会带出任何私密信息,`git status` 也不会因为跑过程序而变脏。
+不放 `~/.cache` 而是单独的 `~/.singbox-router`:里面有订阅 token 和节点凭据,清理工具不该碰的地方。**程序目录里不再有任何运行期数据** —— 订阅 token、节点凭据、规则集都在家目录下,仓库天然脱敏:克隆一份代码不会带出任何私密信息,`git status` 也不会因为跑过程序而变脏。
 
-老版本把这些写在程序目录的 `data/` 下。首次启动会**复制**(不是移动)到新目录,并在旧目录留一份 `MIGRATED.txt` 说明:
+老版本把这些写在程序目录的 `data/` 下。首次启动会**复制**(不是移动)到新目录:
 
 - 新目录已有 `state.json` 时**一律不覆盖**
 - 旧目录**不删** —— 迁移过程中断也不会丢东西,确认新目录正常后自行清理
-- 面板顶部会提示这次迁移搬了哪些文件
+- 显式设置 `SBR_DATA_DIR` 时跳过迁移 —— 自检靠这个拿到一个干净、隔离的目录
 
 打开这个目录有两条路,都不需要记路径:
 
@@ -96,6 +96,7 @@ rulesets/*.srs          GeoIP / GeoSite 规则集
 | `mainPort` | `7890` | 主代理端口 |
 | `portBase` | `20800` | 节点独立端口起始值 |
 | `clashApiPort` | `19090` | Clash API 端口 |
+| `clashSecret` | 随机生成 | Clash API 的 Bearer token |
 | `allowLan` | `false` | 监听 `0.0.0.0` 而非 `127.0.0.1` |
 | `dnsLocal` | `223.5.5.5` | 国内 DNS,UDP 直连 |
 | `dnsRemote` | `8.8.8.8` | 国外 DNS,DoT/853 经代理 |
@@ -114,13 +115,13 @@ rulesets/*.srs          GeoIP / GeoSite 规则集
 | `tunStrictRoute` | `true` | 严格路由,防止流量绕过 |
 | `tunTableIndex` | `2023` | 刻意避开 sing-box 默认 2022,见 [tun.md](tun.md#刻意错开路由表索引) |
 | `tunRuleIndex` | `9100` | 刻意避开默认 9000 |
-| `testUrl` | `gstatic.com/generate_204` | 延迟测试与 `auto` 组测速地址 |
-| `testTimeout` | `5000` | ms |
+| `testUrl` | `https://www.gstatic.com/generate_204` | 延迟测试与 `auto` 组测速地址 |
+| `testTimeout` | `3000` | ms |
 | `logLevel` | `info` | |
 | `corePath` | `''` | 留空则自动探测 sing-box |
 | `bypassList` | 见 `src/store.js` | 系统代理绕过列表 |
 
-状态存在 `~/.config/singbox-router/state.json`,原子写入(写临时文件再 rename)。自定义分流规则也在同一个文件里(`rules` 数组,顺序即优先级)。详见 [数据目录](#数据目录)。
+状态存在 `~/.singbox-router/state.json`,原子写入(写临时文件再 rename)。自定义分流规则也在同一个文件里(`rules` 数组,顺序即优先级)。详见 [数据目录](#数据目录)。
 
 ## HTTP API
 
@@ -138,8 +139,7 @@ rulesets/*.srs          GeoIP / GeoSite 规则集
 | DELETE | `/api/nodes/:id` | 删除节点 |
 | POST | `/api/nodes/reassign-ports` | 从起始值重排全部端口 |
 | POST | `/api/nodes/:id/test` · `/api/nodes/test-all` | 延迟测试(经 Clash API,需内核在跑) |
-| GET | `/api/rules/meta` | 规则类型 / 匹配方式 / 去向的可选值(前端下拉框用) |
-| POST | `/api/rules` | `{kind, match, values, target, note?}` 新增分流规则,校验不过返回 400 |
+| POST | `/api/rules` | `{domain?, ip?, process?, target, note?}` 新增分流规则(域名/IP/进程任意组合,校验不过返回 400) |
 | PATCH | `/api/rules/:id` | 改规则;只带 `enabled` 时不重新校验内容 |
 | DELETE | `/api/rules/:id` | 删除规则 |
 | POST | `/api/rules/reorder` | `{ids}` 按给定顺序重排 —— **顺序即优先级** |
@@ -153,6 +153,12 @@ rulesets/*.srs          GeoIP / GeoSite 规则集
 | POST | `/api/proxy/select` | `{name}` 切换主端口所用节点 |
 | POST | `/api/mode` | `{mode: rule\|global\|direct}` |
 | GET | `/api/logs/stream` | SSE:内核日志 + 状态推送 |
+| GET | `/api/doctor` | 15 项体检一次跑完(含可脱敏粘贴的文本报告) |
+| POST | `/api/doctor/fix` | `{action}` 一键修(白名单:download-core / download-rulesets / authorize-tun / recover-tun / restart-network / install-desktop / takeover-terminal / apply) |
+| POST | `/api/core/download` | `{mirror?, version?}` 面板内下载 / 更新内核 |
+| POST | `/api/tun/authorize` · `/api/tun/recover` | pkexec 授权 TUN / 清理 TUN 残留 |
+| POST | `/api/network/restart` | 重启网络服务(断网急救) |
+| GET | `/api/termproxy` · POST `/api/termproxy` | 终端代理接管状态 / `{on: bool}` |
 
 前端所有 DOM 都用 `document.createElement` 构建,**从不拼 `innerHTML`** —— 节点名来自订阅,是不可信输入。
 
@@ -172,7 +178,7 @@ npm test
 - 各协议 URI 解析(含 reality / ws early-data / grpc / vmess base64 JSON / ss SIP002 与旧版整段 base64)
 - `importText` 端到端(base64 订阅、混合多行链接、JS 对象字面量)
 - 配置生成:端口分配、tag 唯一化、**规则顺序不变量**、TUN 入站、DNS 走向
-- 数据目录:`SBR_DATA_DIR` 优先、XDG 默认值(**子进程**里验证,不碰真实目录)、运行期文件全部落在数据目录内
+- 数据目录:`SBR_DATA_DIR` 优先、`~/.singbox-router` 默认值(**子进程**里验证,不碰真实目录)、运行期文件全部落在数据目录内
 - 自定义规则:输入规范化(协议前缀 / 路径 / `*.` / 大小写)、裸 IP 补掩码、**IP 正则被拒绝并给出 CIDR 建议**、**RE2 不支持的构造在保存时就拦下**(而 `(?P<name>…)` 必须放行)、悬空节点引用不产出规则
 - 国内自动分流:`local` 只引用本地绝对路径、**geo 规则排在所有显式规则之后**、DNS 侧配套规则、`remote` 带 `download_detour` 与更新周期、镜像拼接、`auto` 的退回逻辑、缺文件时 `validate()` 说清缺哪份
 
@@ -188,15 +194,20 @@ src/yaml.js            精简 YAML 解析器（Clash 配置用）
 src/config.js          ★ 生成 sing-box 配置，规则顺序在这里
 src/rules.js           自定义分流规则：校验 / 正则体检 / 翻译成 route 规则
 src/ruleset.js         GeoIP / GeoSite 规则集：下载、状态、local-vs-remote
-src/open.js            用文件管理器打开目录（环境检查 + 多 opener 兜底）
 src/core.js            内核进程管理 + Clash API 客户端 + TUN 前置检查
 src/sysproxy.js        gsettings 系统代理接管与还原
 src/subscribe.js       订阅拉取与增量同步
+src/termproxy.js       终端代理接管（rc 文件挂 source 片段，带活性检查）
+src/doctor.js          15 项体检 + 一键修 + 可脱敏文本报告
+src/setup.js           内核下载 / TUN 授权 / 断网急救（pkexec → scripts/sbr-helper.sh）
+src/open.js            用文件管理器打开目录（环境检查 + 多 opener 兜底）
 public/                单页面板（原生 JS，无框架，无构建步骤）
 app/gui.py             托盘常驻（GTK3 + AppIndicator，只调面板 API，不含 WebKit）
 app/window.py          面板窗口（WebKitGTK，独立进程，关窗即退出）
+scripts/sbr-helper.sh  root 侧助手（参数白名单校验，被 pkexec 调用）
+scripts/cli.mjs        命令行版（get-core / get-geoip / setup-tun / tun-recover / restart-network / doctor）
+scripts/find-node.sh   找一个 ≥20 的 node（systemd 服务不读 rc 文件）
 scripts/get-core.sh    下载 sing-box 内核
-scripts/get-geoip.sh   下载 GeoIP / GeoSite 规则集到数据目录
 scripts/setup-tun.sh   一次性授权（setcap + polkit）
 scripts/tun-recover.sh 断网急救
 scripts/install-app.sh 装成桌面应用（服务 + 托盘 + 菜单入口）
@@ -204,7 +215,7 @@ scripts/uninstall-app.sh
 scripts/build-deb.sh   打 .deb 包
 scripts/selftest.mjs   77 项断言
 
-~/.config/singbox-router/   运行期数据（状态、凭据、规则集、内核缓存），见上文「数据目录」
+~/.singbox-router/     运行期数据（状态、凭据、规则集、内核缓存），见上文「数据目录」
 ```
 
 程序目录里**不产生**运行期数据 —— 仓库里没有任何需要 gitignore 的敏感文件。`data/` 仍在 `.gitignore` 里,只是为了兜住老版本升级前留下的那一份。

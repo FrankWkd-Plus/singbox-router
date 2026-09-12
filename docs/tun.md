@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | Chrome / Firefox | ✅ | 无需额外配置 |
 | **Telegram Desktop** | ❌ | 手动填 SOCKS5 `127.0.0.1:7890`,或填某节点的独立端口把 TG 钉死在该节点 |
-| curl / git / npm | ❌ | `source ~/.config/singbox-router/proxy-env.sh`,或各自配 proxy |
+| curl / git / npm | ❌ | `source ~/.singbox-router/proxy-env.sh`,或各自配 proxy |
 | 其它 GUI 程序 | 不一定 | 用 TUN 一网打尽 |
 
 ## 启用
