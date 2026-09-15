@@ -794,7 +794,7 @@ function renderDoctor() {
   $('#doctor-env').replaceChildren(
     ...[
       ['数据目录', e.dataDir],
-      ['程序目录', ''],
+      ['程序目录', e.appDir],
       ['Node.js', e.node],
       ['系统', `${e.platform} / ${e.arch}`],
       ['桌面', e.desktop],

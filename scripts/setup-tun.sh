@@ -67,6 +67,18 @@ polkit.addRule(function (action, subject) {
 });
 EOF
   sudo chmod 644 "$POLKIT_RULE"
+
+  # 写一份标记到数据目录：polkit 121+（Ubuntu 24.04 / Mint 22 起）的
+  # /etc/polkit-1/rules.d 是 root:polkitd 0700，面板（普通用户）读不了规则文件，
+  # doctor 复核"规则装了没"靠这份标记。脚本可能被 sudo 跑，家目录按目标用户取。
+  MARKER_HOME="$HOME"
+  [ -n "${SUDO_USER:-}" ] && MARKER_HOME="$(getent passwd "$SUDO_USER" | cut -d: -f6)"
+  if [ -n "$MARKER_HOME" ]; then
+    mkdir -p "$MARKER_HOME/.singbox-router" 2>/dev/null || true
+    printf '{"user":"%s","at":%s}\n' "$TARGET_USER" "$(date +%s)" \
+      > "$MARKER_HOME/.singbox-router/polkit-rule.json" 2>/dev/null || true
+  fi
+
   log "已写入 $POLKIT_RULE"
 fi
 

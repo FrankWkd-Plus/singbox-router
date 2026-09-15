@@ -35,6 +35,13 @@ const ARCH_MAP = {
 
 const HELPER = path.join(ROOT, 'scripts', 'sbr-helper.sh')
 const POLKIT_RULE = '/etc/polkit-1/rules.d/50-singbox-router.rules'
+/**
+ * polkit 规则装好时写的标记。Ubuntu 24.04 / Mint 22 起 /etc/polkit-1/rules.d
+ * 是 root:polkitd 0700，面板（普通用户）读规则文件必然 EACCES —— 那不代表
+ * 规则不存在。装规则成功时（authorizeTun / setup-tun.sh）写这份标记，
+ * 读不到规则文件时就以它为准。
+ */
+const POLKIT_MARKER = path.join(DATA_DIR, 'polkit-rule.json')
 const DESKTOP_LOG = path.join(DATA_DIR, 'desktop-install.log')
 
 // ------------------------------------------------------------------ 小工具
@@ -505,12 +512,35 @@ function runHelperTty(args, timeout) {
 
 /** polkit 免密规则装了没（装了就说明授权跑过一次） */
 export function polkitRuleStatus() {
+  const user = os.userInfo().username
   try {
     const text = fs.readFileSync(POLKIT_RULE, 'utf8')
-    const user = os.userInfo().username
     return { present: true, forCurrentUser: text.includes(`"${user}"`), path: POLKIT_RULE }
+  } catch (e) {
+    // EACCES ≠ 规则不存在：polkit 121+（Ubuntu 24.04 / Mint 22 起）的规则目录是
+    // root:polkitd 0700，普通用户读不了。装规则时写过标记的话，以标记为准。
+    if (e && e.code === 'EACCES') {
+      try {
+        const m = JSON.parse(fs.readFileSync(POLKIT_MARKER, 'utf8'))
+        if (m && m.user) {
+          return { present: true, forCurrentUser: m.user === user, via: 'marker', path: POLKIT_RULE }
+        }
+      } catch {
+        // 标记也没有（规则是老版本装的）—— 只能如实说"读不到、无法复核"
+      }
+      return { present: false, unreadable: true, path: POLKIT_RULE }
+    }
+    return { present: false, path: POLKIT_RULE }
+  }
+}
+
+/** 装规则成功后写标记（规则文件本身普通用户读不了，见 POLKIT_MARKER 注释） */
+function writePolkitMarker(user) {
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true })
+    fs.writeFileSync(POLKIT_MARKER, JSON.stringify({ at: Date.now(), user }, null, 2))
   } catch {
-    return { present: false, forCurrentUser: false, path: POLKIT_RULE }
+    // 标记写失败不影响授权本身，只是下次 doctor 复核不到
   }
 }
 
@@ -527,7 +557,10 @@ export async function authorizeTun(opts = {}) {
   }
   const user = os.userInfo().username
   const r = await runHelper(['authorize-tun', core, user], 180000, opts)
-  if (r.ok) clearCoreCache() // capability 变了，缓存的判断结果作废
+  if (r.ok) {
+    clearCoreCache() // capability 变了，缓存的判断结果作废
+    writePolkitMarker(user) // 规则文件普通用户读不了（polkit 121+ 0700），靠标记复核
+  }
   return { ...r, core, user, polkit: polkitRuleStatus() }
 }
 

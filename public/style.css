@@ -127,8 +127,10 @@ code {
   gap: 16px;
   flex-wrap: wrap;
   padding: 15px 24px;
-  background: color-mix(in srgb, var(--surface) 88%, transparent);
-  backdrop-filter: saturate(180%) blur(12px);
+  /* 不用半透明 + backdrop-filter：WebKitGTK 没有它的 GPU 加速，sticky 顶栏
+     每帧都要把底下整页软件模糊一遍 —— 滚动 / 切 tab / 首屏全部掉帧的元凶。
+     换不透明底色，观感几乎不变。 */
+  background: var(--surface);
   /* 浮起代替贴边线 */
   box-shadow: var(--sh-1);
   position: sticky;
@@ -868,7 +870,8 @@ dialog {
 
 dialog::backdrop {
   background: rgb(10 12 16 / 0.5);
-  backdrop-filter: blur(3px);
+  /* 不加 backdrop-filter —— 打开对话框时把整页模糊一遍，WebKitGTK 上是软件实现，
+     进程树 / 日志这种要滚动的弹窗会卡到没法用。纯压暗已经足够把焦点给对话框。 */
 }
 
 .dialog-head {

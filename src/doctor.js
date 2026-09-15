@@ -15,7 +15,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { execFileSync } from 'node:child_process'
-import { DATA_DIR, LEGACY_DATA_DIR, STATE_FILE, getState, lastMigration } from './store.js'
+import { DATA_DIR, LEGACY_DATA_DIR, STATE_FILE, ROOT, getState, lastMigration } from './store.js'
 import * as core from './core.js'
 import * as ruleset from './ruleset.js'
 import * as setup from './setup.js'
@@ -132,25 +132,31 @@ function checkDataDir() {
     }
   }
 
+  // migrateLegacyDir 返回 { done, from, to, copied, skipped }（失败时 done:false + error）。
+  // 注意判断的是 done 不是 ok —— 这个对象从来没有 ok 字段，早期版本判断 mig.ok
+  // 导致**成功的迁移也掉进"迁移时出错：undefined"的警告分支**。
   const mig = lastMigration()
-  if (mig && mig.ok) {
-    return {
-      id: 'data-dir',
-      title: '配置目录',
-      level: 'info',
-      detail: DATA_DIR,
-      more:
-        `本次启动从旧目录复制了 ${mig.copied.length} 项（${mig.copied.join('、') || '无'}）。\n` +
-        `旧目录 ${mig.from} 原样留着没动，确认新目录一切正常后可以自己清理。`
-    }
-  }
-  if (mig && !mig.ok) {
+  if (mig && !mig.done) {
     return {
       id: 'data-dir',
       title: '配置目录',
       level: 'warn',
       detail: `从 ${mig.from} 迁移时出错：${mig.error}`,
       more: '程序仍然使用新目录，但旧数据可能没全带过来。可以手动把文件复制过去。'
+    }
+  }
+  if (mig && mig.done) {
+    const parts = []
+    if (mig.copied?.length) parts.push(`复制了 ${mig.copied.length} 项（${mig.copied.join('、')}）`)
+    if (mig.skipped?.length) parts.push(`跳过：${mig.skipped.join('、')}`)
+    return {
+      id: 'data-dir',
+      title: '配置目录',
+      level: 'info',
+      detail: DATA_DIR,
+      more:
+        `本次启动处理了旧目录 ${mig.from} —— ${parts.join('；') || '没有需要复制的内容'}。\n` +
+        `旧目录原样留着没动（复制不是移动），确认新目录一切正常后可以自己清理。`
     }
   }
 
@@ -285,20 +291,30 @@ function checkTun() {
   if (cap.ok) {
     const via = cap.via === 'root' ? '以 root 运行' : 'setcap 已授权'
     let more
-    if (!polkit.present) {
+    let level = 'ok'
+    if (polkit.unreadable) {
+      // polkit 121+（Ubuntu 24.04 / Mint 22 起）规则目录仅 root 可读，且没有
+      // 授权标记（规则是老版本装的）。无法复核 ≠ 没装 —— 报 ok 加一句说明，
+      // 别让已经授权过的用户一直看着一条假警告。
+      more =
+        'polkit 规则目录（/etc/polkit-1/rules.d）仅 root 可读，无法自动复核规则在不在。' +
+        '若启停 TUN 时每次都弹密码框，点「一次性授权 TUN」重装一次即可。'
+    } else if (!polkit.present) {
       more =
         'capability 有了，但没有 polkit 免密规则 —— TUN 模式下内核要通过 systemd-resolved ' +
         '设置本网卡 DNS，每次启停都会弹一次密码框。点「一次性授权 TUN」把这条也补上。'
+      level = 'warn'
     } else if (!polkit.forCurrentUser) {
       more = `${polkit.path} 存在但里面不是当前用户（${os.userInfo().username}），启停时仍会弹框。`
+      level = 'warn'
     }
     return {
       id: 'tun',
       title: 'TUN 权限',
-      level: more ? 'warn' : 'ok',
+      level,
       detail: `${via}${polkit.present ? '，polkit 免密规则已装' : ''}`,
       more,
-      fix: more ? { action: 'authorize-tun', label: '一次性授权 TUN' } : undefined
+      fix: level === 'warn' ? { action: 'authorize-tun', label: '一次性授权 TUN' } : undefined
     }
   }
 
@@ -588,6 +604,7 @@ export async function run(ctx = {}) {
       arch: process.arch,
       user: os.userInfo().username,
       dataDir: DATA_DIR,
+      appDir: ROOT,
       desktop: process.env.XDG_CURRENT_DESKTOP || '未知',
       root: process.getuid ? process.getuid() === 0 : false
     }
